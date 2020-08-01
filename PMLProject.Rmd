@@ -1,0 +1,140 @@
+---
+title: "Practical Machine Learning Project"
+author: "Andrés Hidalgo Vargas"
+date: "31/7/2020"
+output: html_document
+---
+# Background
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).\n 
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience. We made sure that all participants could easily simulate the mistakes in a safe and controlled manner by using a relatively light dumbbell (1.25kg). [Resource](http://groupware.les.inf.puc-rio.br/har)
+
+[Github Repo](https://github.com/AnHiVa/Practical_ML_Project)
+
+# Approach
+
+The goal is to predict the manner in which the individual performed the exercise. Cross validation of decision tree and random forest models will be performed.
+
+# Data preparation
+
+Loading libraries
+```{r message=FALSE, warning=FALSE}
+library(caret); library(tidyverse); library(rpart);
+library(rpart.plot); library(rattle); library(corrplot)
+```
+
+Download datasets
+```{r message=FALSE, warning=FALSE}
+train_filename <- 'pml-training.csv'
+test_filename <- 'pml-testing.csv'
+  
+if (!file.exists(train_filename)){
+    
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",train_filename, method = "curl")
+  filedownloadtime <- paste(file.info(train_filename)$ctime, Sys.timezone(), sep = " ")
+  print(paste("The Weights training set was downloaded:", filedownloadtime,sep = " "))
+    
+} else {
+    
+  filedownloadtime <- paste(file.info(train_filename)$ctime, Sys.timezone(), sep = " ")
+  print(paste("The Weights training set was downloaded:", filedownloadtime, sep = " "))
+    
+}
+if (!file.exists(test_filename)){
+  
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",test_filename, method = "curl")
+  filedownloadtime <- paste(file.info(test_filename)$ctime, Sys.timezone(), sep = " ")
+  print(paste("The Weights testing set was downloaded:", filedownloadtime,sep = " "))
+  
+} else {
+  
+  filedownloadtime <- paste(file.info(test_filename)$ctime, Sys.timezone(), sep = " ")
+  print(paste("The Weights testing set was downloaded:", filedownloadtime, sep = " "))
+  
+}
+```
+
+Load data
+```{r message=FALSE, warning=FALSE}
+testing <- read_csv('pml-testing.csv')
+training <- read_csv('pml-training.csv')
+glimpse(training)
+```
+
+There are a lot of NA in several variables, also, we will only be using variables in the classification of
+
+- Classe
+- Gyroscope
+- Accelerometer
+
+
+Clean data
+`
+``{r warning=FALSE}
+# Lots of summary statistics with almost all NA
+training_small <- training %>%
+  select(-matches('var|kurtosis|skewness|max|min|amplitude|avg|stddev')) %>%
+  mutate(classe = as.factor(classe)) %>%
+  group_by(classe)
+#Due to the specifications in the article, we will use the gyroscope and accelerometer as our predictor
+training_ga <- training_small %>%
+  select(matches('classe|^gyros|^accel'))
+```
+
+Cut the training set into training and test sets
+```{r message=FALSE, warning=FALSE}
+set.seed(1579)
+trainingset <- createDataPartition(y = training_ga$classe, p = 0.6, list = FALSE)
+TrainTrainingSet <- training_ga[trainingset, ]
+TestTrainingSet <- training_ga[-trainingset, ]
+```
+
+## Correlation diagram
+```{r}
+corrplot(cor(TrainTrainingSet[, -length(names(TrainTrainingSet))]), 
+         method = "color", tl.cex = 0.5)
+```
+
+# Decision Tree
+
+```{r cache=TRUE}
+set.seed(8745)
+model_dt <- rpart(classe~., data= TrainTrainingSet, method = 'class')
+pred_dt <- predict(model_dt, TestTrainingSet, type = 'class')
+```
+
+Decision tree plot
+```{r}
+fancyRpartPlot(model_dt, main = 'Decision Tree')
+```
+
+Confusion Matrix 
+```{r}
+confusionMatrix(pred_dt, TestTrainingSet$classe)
+```
+The decision tree's accuracy is 56.95%, which is relatively low for a reliable prediction model.
+
+# Random Forest 
+
+```{r cache=TRUE}
+set.seed(7654)
+model_rf <- train(classe~.,data=TrainTrainingSet, method='rf')
+pred_rf <- predict(model_rf, TestTrainingSet)
+```
+
+Confusion Matrix
+```{r}
+confusionMatrix(pred_rf, TestTrainingSet$classe)
+```
+The random forest model's accuracy is 97.87%, which is a high accuracy.
+
+# Asignment Answers
+
+Based on the results, the Random Forest algorithm had a better outcome than Decision Trees. The Random Forest accuracy was 97.87% (0.9753, 0.9818) with a 95% confidence level. While the Decision Tree model has an accuracy of 56.95% (0.5584, 0.5805) with a 95% confidence level.\n
+Therefore, the Random Forest model is selected to perform the prediction for the assignment test set. With an expected out of sample error of 2.13%.
+
+```{r}
+predict(model_rf, testing)
+```
+
+
